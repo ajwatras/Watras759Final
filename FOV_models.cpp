@@ -92,8 +92,9 @@ Matrix rotateMat(double x_ang, double y_ang, double z_ang){
 }
 
 Matrix FOVcone(double *FOV_rads, Matrix R, Matrix t, double scale){
-	Matrix out,ray;
-	
+	//incomplete
+	Matrix out, ray;
+
 	out.x_dim = 4;
 	out.y_dim = 3;
 	double *elems = (double *) malloc(sizeof(double)*12);
@@ -115,4 +116,20 @@ Matrix FOVcone(double *FOV_rads, Matrix R, Matrix t, double scale){
 	return out;
 
 
+}
+
+int rayPlaneIntersect(double *plane, double *ray_normal, double *ray_translation, double *point){
+	
+	//incomplete
+	return 0;
+
+}
+
+double arrayArea(){
+	//incomplete
+	return 0;
+}
+
+void combinePoly(){
+	//incomplete
 }
