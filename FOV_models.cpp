@@ -1,10 +1,25 @@
 #include "omp.h"
+#include <iostream>
+#include <deque>
+
+#include <boost/geometry.hpp>
+#include <boost/geometry/geometries/point_xy.hpp>
+#include <boost/geometry/geometries/polygon.hpp>
+#include <boost/geometry/io/wkt/wkt.hpp>
+
+#include <boost/foreach.hpp>
 
 struct Matrix{
 	int x_dim;
 	int y_dim;
 	double *elements;
 };
+
+namespace bg = boost::geometry;
+namespace bgm = bg::model;
+
+using point      = bgm::d2::point_xy<double>;
+using polygon    = bgm::polygon<point>;
 
 Matrix MatMult(Matrix A, Matrix B){
 	Matrix C;
@@ -92,12 +107,13 @@ Matrix rotateMat(double x_ang, double y_ang, double z_ang){
 }
 
 Matrix FOVcone(double *FOV_rads, Matrix R, Matrix t, double scale){
-	//incomplete
+	//incomplete, need to parallelize
 	Matrix out, ray;
 
-	out.x_dim = 4;
-	out.y_dim = 3;
+	out.x_dim = 3;
+	out.y_dim = 4;
 	double *elems = (double *) malloc(sizeof(double)*12);
+	out.elements = elems;
 
 	Matrix direction;
 	direction.x_dim = 1;
@@ -112,24 +128,99 @@ Matrix FOVcone(double *FOV_rads, Matrix R, Matrix t, double scale){
 
 	ray = MatMult(R,direction);
 
+	out.elements[0] = ray.elements[0];
+	out.elements[1] = ray.elements[1];
+	out.elements[2] = ray.elements[2];
+
+	direction.elements[0] = -sin(FOV_rads[0]/2);
+	direction.elements[1] = sin(FOV_rads[1]/2);
+	direction.elements[2] = 1;
+
+	ray = MatMult(R,direction);
+
+	out.elements[3] = ray.elements[0];
+	out.elements[4] = ray.elements[1];
+	out.elements[5] = ray.elements[2];
+
+	direction.elements[0] = -sin(FOV_rads[0]/2);
+	direction.elements[1] = -sin(FOV_rads[1]/2);
+	direction.elements[2] = 1;
+
+	ray = MatMult(R,direction);
+
+	out.elements[6] = ray.elements[0];
+	out.elements[7] = ray.elements[1];
+	out.elements[8] = ray.elements[2];
+
+	direction.elements[0] = sin(FOV_rads[0]/2);
+	direction.elements[1] = -sin(FOV_rads[1]/2);
+	direction.elements[2] = 1;
+
+	ray = MatMult(R,direction);
+
+	out.elements[9] = ray.elements[0];
+	out.elements[10] = ray.elements[1];
+	out.elements[11] = ray.elements[2];
+
 
 	return out;
 
 
 }
-
 int rayPlaneIntersect(double *plane, double *ray_normal, double *ray_translation, double *point){
+	//Intersect a ray with a plane, then store the resulting 3x1 vector in point.
+	double numerator, denominator, t;
+	denominator = ray_normal[0]*plane[0] + ray_normal[1]*plane[1] + ray_normal[2]*plane[2];
+	numerator = ray_translation[0]*plane[0] + ray_translation[1]*plane[1] + ray_translation[2]*plane[2] + plane[3];
 	
-	//incomplete
-	return 0;
-
+	if (denominator == 0.)
+		return 1;
+	else{
+		t = -numerator/denominator;
+		for(int i = 0; i < 3; i++){
+			point[i] = ray_translation[i] + ray_normal[i]*t;
+		}
+		return 0;
+	}
 }
 
-double arrayArea(){
+polygon FOVproject(double *FOV_rads, double *plane_of_stitching,Matrix camera_R, Matrix camera_t){
+	polygon output;
+	double *coord = (double *)malloc(sizeof(double)*12);
+	int flag;
+
+	//generate FOV cone
+	Matrix rays = FOVcone(FOV_rads,camera_R,camera_t,1);
+	
+	//Perform Ray-plane intersection
+	flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[0],camera_t.elements,&coord[0]);
+	flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[3],camera_t.elements,&coord[3]);
+	flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[6],camera_t.elements,&coord[6]);
+	flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[9],camera_t.elements,&coord[9]);
+
+	//combine points into output
+	point corners[4];
+
+	for (int i = 0; i < 4; i++){
+		corners[i] = { coord[3*i], coord[3*i+1] };
+	}
+	bg::assign_points(output,corners);
+	return output;
+}
+
+
+double arrayArea(double *FOV_rads, Matrix camera_R, Matrix camera_t, double *plane_of_stitching,double thresh){
+	//Finds the total area of a camera array set up.
+
+
 	//incomplete
 	return 0;
 }
 
-void combinePoly(){
+polygon combinePoly(polygon A, polygon B, char *flag){
+	//Combines two polygons using intersection or union.
+	polygon output;
+//	boost::geometry::intersection(A, B, output);
+	return output;
 	//incomplete
 }

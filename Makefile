@@ -2,7 +2,7 @@
 WFLAGS	:= -Wall -Wextra -Wsign-conversion -Wsign-compare
 
 # Optimization and architecture
-OPT		:= -O3
+OPT		:= -I/usr/include/boost -L/usr/include/boost
 ARCH   	:= -march=native
 
 # Language standard
@@ -24,7 +24,7 @@ debug : $(EXEC)
 all : main
 
 main: main.cu FOV_models.cpp 
-	nvcc -o main main.cu 
+	nvcc -o main main.cu $(OPT)
 
 
 
