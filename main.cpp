@@ -11,7 +11,7 @@ int main(int argc, char* argv[]){
 double FOV_rads[2] = {1,1};
 Matrix t;
 
-Matrix R = rotateMat(.5,0,0);
+Matrix R = rotateMat(0,0,0);
 
 t.x_dim = 1;
 t.y_dim = 3;

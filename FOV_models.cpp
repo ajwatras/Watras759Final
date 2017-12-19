@@ -1,11 +1,13 @@
 #include "omp.h"
 #include <iostream>
 #include <deque>
+#include <vector>
 
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/polygon.hpp>
 #include <boost/geometry/io/wkt/wkt.hpp>
+
 
 #include <boost/foreach.hpp>
 
@@ -22,6 +24,8 @@ using point      = bgm::d2::point_xy<double>;
 using polygon    = bgm::polygon<point>;
 
 Matrix MatMult(Matrix A, Matrix B){
+	//Basic matrix multiplication. 
+	//Could easily be made parallel in CUDA or openMP
 	Matrix C;
 	C.x_dim = A.x_dim;
 	C.y_dim = B.y_dim;
@@ -108,65 +112,89 @@ Matrix rotateMat(double x_ang, double y_ang, double z_ang){
 
 Matrix FOVcone(double *FOV_rads, Matrix R, Matrix t, double scale){
 	//incomplete, need to parallelize
-	Matrix out, ray;
+	Matrix out, ray1,ray2,ray3,ray4;
 
 	out.x_dim = 3;
 	out.y_dim = 4;
 	double *elems = (double *) malloc(sizeof(double)*12);
 	out.elements = elems;
 
-	Matrix direction;
-	direction.x_dim = 1;
-	direction.y_dim = 3;
-	double *dir_elems = (double *) malloc(sizeof(double)*3);
+	#pragma omp parallel sections
+	{
+		#pragma omp section
+		{ 
+			Matrix direction1;
+			direction1.x_dim = 1;
+			direction1.y_dim = 3;
+			direction1.elements = (double *) malloc(sizeof(double)*3);
 
-	dir_elems[0] = sin(FOV_rads[0]/2);
-	dir_elems[1] = sin(FOV_rads[1]/2);
-	dir_elems[2] = 1;
+			direction1.elements[0] = sin(FOV_rads[0]/2);
+			direction1.elements[1] = sin(FOV_rads[1]/2);
+			direction1.elements[2] = 1;
 
-	direction.elements = dir_elems;
+			ray1 = MatMult(R,direction1);
 
-	ray = MatMult(R,direction);
+			out.elements[0] = ray1.elements[0];
+			out.elements[1] = ray1.elements[1];
+			out.elements[2] = ray1.elements[2];
+		}
+		#pragma omp section
+		{
+			Matrix direction2;
+			direction2.x_dim = 1;
+			direction2.y_dim = 3;
+			direction2.elements = (double *) malloc(sizeof(double)*3);
 
-	out.elements[0] = ray.elements[0];
-	out.elements[1] = ray.elements[1];
-	out.elements[2] = ray.elements[2];
+			direction2.elements[0] = -sin(FOV_rads[0]/2);
+			direction2.elements[1] = sin(FOV_rads[1]/2);
+			direction2.elements[2] = 1;
 
-	direction.elements[0] = -sin(FOV_rads[0]/2);
-	direction.elements[1] = sin(FOV_rads[1]/2);
-	direction.elements[2] = 1;
+			ray2 = MatMult(R,direction2);
 
-	ray = MatMult(R,direction);
+			out.elements[3] = ray2.elements[0];
+			out.elements[4] = ray2.elements[1];
+			out.elements[5] = ray2.elements[2];
+		}
+		#pragma omp section
+		{
+			Matrix direction3;
+			direction3.x_dim = 1;
+			direction3.y_dim = 3;
+			direction3.elements = (double *) malloc(sizeof(double)*3);
 
-	out.elements[3] = ray.elements[0];
-	out.elements[4] = ray.elements[1];
-	out.elements[5] = ray.elements[2];
+			direction3.elements[0] = -sin(FOV_rads[0]/2);
+			direction3.elements[1] = -sin(FOV_rads[1]/2);
+			direction3.elements[2] = 1;
 
-	direction.elements[0] = -sin(FOV_rads[0]/2);
-	direction.elements[1] = -sin(FOV_rads[1]/2);
-	direction.elements[2] = 1;
+			ray3 = MatMult(R,direction3);
 
-	ray = MatMult(R,direction);
+			out.elements[6] = ray3.elements[0];
+			out.elements[7] = ray3.elements[1];
+			out.elements[8] = ray3.elements[2];
+		}
+		#pragma omp section
+		{
+			Matrix direction4;
+			direction4.x_dim = 1;
+			direction4.y_dim = 3;
+			direction4.elements = (double *) malloc(sizeof(double)*3);
 
-	out.elements[6] = ray.elements[0];
-	out.elements[7] = ray.elements[1];
-	out.elements[8] = ray.elements[2];
+			direction4.elements[0] = sin(FOV_rads[0]/2);
+			direction4.elements[1] = -sin(FOV_rads[1]/2);
+			direction4.elements[2] = 1;
 
-	direction.elements[0] = sin(FOV_rads[0]/2);
-	direction.elements[1] = -sin(FOV_rads[1]/2);
-	direction.elements[2] = 1;
+			ray4 = MatMult(R,direction4);
 
-	ray = MatMult(R,direction);
-
-	out.elements[9] = ray.elements[0];
-	out.elements[10] = ray.elements[1];
-	out.elements[11] = ray.elements[2];
-
-
+			out.elements[9] = ray4.elements[0];
+			out.elements[10] = ray4.elements[1];
+			out.elements[11] = ray4.elements[2];
+		}
+	}
 	return out;
 
 
 }
+
 int rayPlaneIntersect(double *plane, double *ray_normal, double *ray_translation, double *point){
 	//Intersect a ray with a plane, then store the resulting 3x1 vector in point.
 	double numerator, denominator, t;
@@ -193,34 +221,133 @@ polygon FOVproject(double *FOV_rads, double *plane_of_stitching,Matrix camera_R,
 	Matrix rays = FOVcone(FOV_rads,camera_R,camera_t,1);
 	
 	//Perform Ray-plane intersection
-	flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[0],camera_t.elements,&coord[0]);
-	flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[3],camera_t.elements,&coord[3]);
-	flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[6],camera_t.elements,&coord[6]);
-	flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[9],camera_t.elements,&coord[9]);
+	#pragma omp parallel sections
+	{
+		#pragma omp section
+		{
+			flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[0],camera_t.elements,&coord[0]);
+		}
+		#pragma omp section
+		{
+			flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[3],camera_t.elements,&coord[3]);
+		}
+		#pragma omp section
+		{
+			flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[6],camera_t.elements,&coord[6]);
+		}
+		#pragma omp section
+		{
+			flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[9],camera_t.elements,&coord[9]);	
+		}
+	}
 
 	//combine points into output
 	point corners[4];
 
-	for (int i = 0; i < 4; i++){
-		corners[i] = { coord[3*i], coord[3*i+1] };
+	#pragma omp parallel for 
+	{	
+		for (int i = 0; i < 4; i++){
+			corners[i] = { coord[3*i], coord[3*i+1] };
+		}
 	}
+
 	bg::assign_points(output,corners);
 	return output;
 }
 
-
-double arrayArea(double *FOV_rads, Matrix camera_R, Matrix camera_t, double *plane_of_stitching,double thresh){
-	//Finds the total area of a camera array set up.
-
-
-	//incomplete
-	return 0;
-}
-
-polygon combinePoly(polygon A, polygon B, char *flag){
+polygon combinePoly(polygon A, polygon B, bool flag,int type){
 	//Combines two polygons using intersection or union.
-	polygon output;
-//	boost::geometry::intersection(A, B, output);
-	return output;
-	//incomplete
+	// Type = 0 => union
+	// Type = 1 => Intersection
+	std::vector<polygon> output;
+
+
+	if (type == 0){
+		bg::union_(A, B, output);
+	}
+	else if (type == 1){
+		bg::intersection(A, B, output);
+	}
+
+	if (output.size() > 1){
+		flag = false;
+		return A;
+	}
+	else if (output.size() == 1){
+		flag = true;
+		return output[0];
+	}
+
+	return A;
 }
+bool isConnected(Matrix A){
+	//Incomplete method for determining if threshold limit has been met. 
+	return true;
+}
+
+double arrayArea(double *FOV_rads, Matrix *camera_R, Matrix *camera_t, double *plane_of_stitching,double thresh){
+	//Finds the total area of a camera array set up.
+	int n = 5;
+	polygon * poly = (polygon *)malloc(sizeof(polygon)*n);
+	polygon array_poly,temp_poly;
+	double area = 0;
+	bool flag = false;
+	int *successes = (int *)malloc(sizeof(int)*n);
+	Matrix overlap_area;
+
+	
+
+	for (int k = 0; k < n; k++){
+		poly[k] = FOVproject(FOV_rads, plane_of_stitching, camera_R[k], camera_t[k]);
+
+ 	}
+ 	array_poly = poly[0];
+
+ 	
+ 	overlap_area.x_dim = n;
+ 	overlap_area.y_dim = n;
+ 	overlap_area.elements = (double *)malloc(sizeof(double)*n*n);
+
+
+ 	for (int i = 0; i < n; i++){
+ 		for (int j = 0; j < n; j++){
+ 			//Calculate overlap area matrix. 
+ 			temp_poly = combinePoly(poly[i],poly[j],flag,1);
+ 			if (flag == true)
+ 			{
+	 			overlap_area.elements[i + n*j] = bg::area(temp_poly);
+	 			overlap_area.elements[j + n*i] = bg::area(temp_poly);
+ 			}
+ 			//Calculate union polygon.
+ 			if ((area > 0) || (i != (n-1))){
+ 				temp_poly = combinePoly(array_poly,poly[j],flag,0);
+ 				if (flag == true)
+ 				{
+ 					//Calculate area
+ 					array_poly = temp_poly;
+ 					area = bg::area(array_poly); 
+ 					successes[j] = 1;
+ 				}
+
+ 			}
+		}
+ 	}
+ 	//check to make sure every polygon was added
+ 	for (int i = 1; i < n; i++){
+ 		successes[0] = successes[0]*successes[i];
+ 	}
+ 	if (successes[0] == 0){
+ 		area = 0;
+ 		return area;
+ 	}
+
+
+ 	//Check for fulfillment of overlap requirement.
+ 	flag = isConnected(overlap_area);
+ 	if (flag == false){
+ 		area = 0;
+ 	}
+
+	return area;
+}
+

@@ -23,8 +23,8 @@ debug : $(EXEC)
 
 all : main
 
-main: main.cu FOV_models.cpp 
-	nvcc -o main main.cu $(OPT)
+main: main.cpp FOV_models.cpp 
+	g++ -o main main.cpp $(OPT)
 
 
 
