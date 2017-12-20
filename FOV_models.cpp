@@ -298,9 +298,11 @@ double arrayArea(double *FOV_rads, Matrix *camera_R, Matrix *camera_t, double *p
 	
 
 	for (int k = 0; k < n; k++){
-		poly[k] = FOVproject(FOV_rads, plane_of_stitching, camera_R[k], camera_t[k]);
+		//need to debug FOVproject
+		//poly[k] = FOVproject(FOV_rads, plane_of_stitching, camera_R[k], camera_t[k]);
 
  	}
+ 	/*
  	array_poly = poly[0];
 
  	
@@ -308,7 +310,7 @@ double arrayArea(double *FOV_rads, Matrix *camera_R, Matrix *camera_t, double *p
  	overlap_area.y_dim = n;
  	overlap_area.elements = (double *)malloc(sizeof(double)*n*n);
 
-
+ 	
  	for (int i = 0; i < n; i++){
  		for (int j = 0; j < n; j++){
  			//Calculate overlap area matrix. 
@@ -332,22 +334,26 @@ double arrayArea(double *FOV_rads, Matrix *camera_R, Matrix *camera_t, double *p
  			}
 		}
  	}
+
  	//check to make sure every polygon was added
  	for (int i = 1; i < n; i++){
  		successes[0] = successes[0]*successes[i];
  	}
- 	if (successes[0] == 0){
- 		area = 0;
- 		return area;
- 	}
+	*/
+ 	//if (successes[0] == 0){
+ 	//	area = 0;
+ 	//}
 
 
  	//Check for fulfillment of overlap requirement.
- 	flag = isConnected(overlap_area);
- 	if (flag == false){
- 		area = 0;
- 	}
-
+ 	//flag = isConnected(overlap_area);
+ 	//if (flag == false){
+ 	//	area = 0;
+ 	//}
+ 	std::cout << area << std::endl;
+ 	free(successes);
+ 	free(poly);
+ 	//free(overlap_area.elements);
 	return area;
 }
 
