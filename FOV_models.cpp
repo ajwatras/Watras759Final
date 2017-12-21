@@ -31,6 +31,9 @@ Matrix MatMult(Matrix A, Matrix B){
 	C.y_dim = B.y_dim;
 	//double elem[C.x_dim * C.y_dim];
 	double *elem = (double *)malloc(sizeof(double)*C.x_dim*C.y_dim);
+	for (int i = 0; i < C.x_dim*C.y_dim; i++){
+		elem[i] = 0;
+	}
 	int n = A.y_dim;
 
 
@@ -43,6 +46,14 @@ Matrix MatMult(Matrix A, Matrix B){
 	}
 	C.elements = elem;
 	return C;
+}
+void printMat(Matrix A){
+	for (int i = 0; i < A.y_dim; i++){
+		for(int j = 0; j < A.x_dim; j++){
+			std::cout << A.elements[i*A.x_dim + j] << " ";
+		}
+		std::cout << std::endl;
+	}
 }
 
 Matrix rotateMat(double x_ang, double y_ang, double z_ang){
@@ -58,8 +69,12 @@ Matrix rotateMat(double x_ang, double y_ang, double z_ang){
 			double *x_elements = (double *)malloc(sizeof(double)*Rx.x_dim*Rx.y_dim);
 
 			x_elements[0] = 1;
+			x_elements[1] = 0;
+			x_elements[2] = 0;
+			x_elements[3] = 0;
 			x_elements[4] = cos(x_ang);
 			x_elements[5] = -sin(x_ang);
+			x_elements[6] = 0;	
 			x_elements[7] = sin(x_ang);
 			x_elements[8] = cos(x_ang);
 
@@ -73,9 +88,13 @@ Matrix rotateMat(double x_ang, double y_ang, double z_ang){
 			double *y_elements = (double *)malloc(sizeof(double)*Ry.x_dim*Ry.y_dim);
 
 			y_elements[0] = cos(y_ang);
+			y_elements[1] = 0;
 			y_elements[2] = sin(y_ang);
+			y_elements[3] = 0;
 			y_elements[4] = 1;
+			y_elements[5] = 0;
 			y_elements[6] = -sin(y_ang);
+			y_elements[7] = 0;
 			y_elements[8] = cos(y_ang);
 
 			Ry.elements = y_elements;
@@ -90,21 +109,26 @@ Matrix rotateMat(double x_ang, double y_ang, double z_ang){
 
 			z_elements[0] = cos(z_ang);
 			z_elements[1] = -sin(z_ang);
+			z_elements[2] = 0;
 			z_elements[3] = sin(z_ang);
 			z_elements[4] = cos(z_ang);
+			z_elements[5] = 0;
+			z_elements[6] = 0;
+			z_elements[7] = 0;
 			z_elements[8] = 1;
 
 			Rz.elements = z_elements;
 		}
 	}
 
-	// Combine axis rotations into single matrix. 
+	// Combine axis rotations into single matrix.
 	R = MatMult(Rx,Ry);
 	R = MatMult(R,Rz);
 
-	free(Rx.elements);
-	free(Ry.elements);
-	free(Rz.elements);
+
+	//free(Rx.elements);
+	//free(Ry.elements);
+	//free(Rz.elements);
 
 	return R;
 
@@ -190,6 +214,12 @@ Matrix FOVcone(double *FOV_rads, Matrix R, Matrix t, double scale){
 			out.elements[11] = ray4.elements[2];
 		}
 	}
+	/*
+	free(direction1.elements);
+	free(direction2.elements);
+	free(direction3.elements);
+	free(direction4.elements);
+	*/
 	return out;
 
 
@@ -212,11 +242,10 @@ int rayPlaneIntersect(double *plane, double *ray_normal, double *ray_translation
 	}
 }
 
-polygon FOVproject(double *FOV_rads, double *plane_of_stitching,Matrix camera_R, Matrix camera_t){
+polygon FOVproject(double *FOV_rads, double *plane_of_stitching, Matrix camera_R, Matrix camera_t){
 	polygon output;
 	double *coord = (double *)malloc(sizeof(double)*12);
-	int flag;
-
+	int flag1,flag2,flag3,flag4;
 	//generate FOV cone
 	Matrix rays = FOVcone(FOV_rads,camera_R,camera_t,1);
 	
@@ -225,33 +254,34 @@ polygon FOVproject(double *FOV_rads, double *plane_of_stitching,Matrix camera_R,
 	{
 		#pragma omp section
 		{
-			flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[0],camera_t.elements,&coord[0]);
+			flag1 = rayPlaneIntersect(plane_of_stitching,&rays.elements[0],camera_t.elements,&coord[0]);
 		}
 		#pragma omp section
 		{
-			flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[3],camera_t.elements,&coord[3]);
+			flag2 = rayPlaneIntersect(plane_of_stitching,&rays.elements[3],camera_t.elements,&coord[3]);
 		}
 		#pragma omp section
 		{
-			flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[6],camera_t.elements,&coord[6]);
+			flag3 = rayPlaneIntersect(plane_of_stitching,&rays.elements[6],camera_t.elements,&coord[6]);
 		}
 		#pragma omp section
 		{
-			flag = rayPlaneIntersect(plane_of_stitching,&rays.elements[9],camera_t.elements,&coord[9]);	
+			flag4 = rayPlaneIntersect(plane_of_stitching,&rays.elements[9],camera_t.elements,&coord[9]);	
 		}
 	}
+
 
 	//combine points into output
 	point corners[4];
 
-	#pragma omp parallel for 
-	{	
+	#pragma omp parallel for 	
 		for (int i = 0; i < 4; i++){
 			corners[i] = { coord[3*i], coord[3*i+1] };
 		}
-	}
 
+	//Seg Fault Happens Here!!!
 	bg::assign_points(output,corners);
+	//free(coord);
 	return output;
 }
 
@@ -296,13 +326,10 @@ double arrayArea(double *FOV_rads, Matrix *camera_R, Matrix *camera_t, double *p
 	Matrix overlap_area;
 
 	
-
 	for (int k = 0; k < n; k++){
-		//need to debug FOVproject
-		//poly[k] = FOVproject(FOV_rads, plane_of_stitching, camera_R[k], camera_t[k]);
-
+		poly[k] = FOVproject(FOV_rads, plane_of_stitching, camera_R[k], camera_t[k]);
  	}
- 	/*
+ 	
  	array_poly = poly[0];
 
  	
@@ -339,20 +366,20 @@ double arrayArea(double *FOV_rads, Matrix *camera_R, Matrix *camera_t, double *p
  	for (int i = 1; i < n; i++){
  		successes[0] = successes[0]*successes[i];
  	}
-	*/
- 	//if (successes[0] == 0){
- 	//	area = 0;
- 	//}
+	
+ 	if (successes[0] == 0){
+ 		area = 0;
+ 	}
 
 
  	//Check for fulfillment of overlap requirement.
- 	//flag = isConnected(overlap_area);
- 	//if (flag == false){
- 	//	area = 0;
- 	//}
- 	std::cout << area << std::endl;
- 	free(successes);
- 	free(poly);
+ 	flag = isConnected(overlap_area);
+ 	if (flag == false){
+ 		area = 0;
+ 	}
+ 	//std::cout << area << std::endl;
+ 	//free(successes);
+ 	//free(poly);
  	//free(overlap_area.elements);
 	return area;
 }

@@ -2,7 +2,7 @@
 WFLAGS	:= -Wall -Wextra -Wsign-conversion -Wsign-compare
 
 # Optimization and architecture
-OPT		:= -I/usr/include/boost -L/usr/include/boost
+OPT		:= -I/usr/include/boost -L/usr/include/boost -fopenmp
 ARCH   	:= -march=native
 
 # Language standard
