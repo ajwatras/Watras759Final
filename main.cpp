@@ -55,6 +55,23 @@ int num_R = (R_bounds[2] - R_bounds[0])/R_bounds[1] + 1;
 int num_T = ((T_bounds[2] - T_bounds[0])/T_bounds[1] + 1);
 int num_Rz = ((Rz_bounds[2] - Rz_bounds[0])/Rz_bounds[1] + 1);
 double *R_vals = (double *)malloc(sizeof(double)*num_R);
+int cc = 0;
+int num_pos = ((Rz_bounds[2] - Rz_bounds[0])/Rz_bounds[1] + 1)*((T_bounds[2] - T_bounds[0])/T_bounds[1] + 1);
+
+int *pose = (int *)malloc(sizeof(int)*num_cameras);
+double *Rz = (double *)malloc(sizeof(double)*num_cameras);
+double *t = (double *)malloc(sizeof(double)*num_cameras);
+double area, max_area;
+max_area = 0;
+polygon poly;
+double *cam1 = (double *)malloc(sizeof(double)*3);
+double *cam2 = (double *)malloc(sizeof(double)*3);
+double *cam3 = (double *)malloc(sizeof(double)*3);
+double *cam4 = (double *)malloc(sizeof(double)*3);
+double *cam5 = (double *)malloc(sizeof(double)*3);
+
+std::vector<bool> v(num_pos);										//Needed in order to run permutations. 
+std::fill(v.begin(), v.begin() + num_cameras, true);
 
 for (int i = 0; i < num_R; i++){
 	R_vals[i] = R_bounds[0] + R_bounds[1] * i;
@@ -62,25 +79,11 @@ for (int i = 0; i < num_R; i++){
 }
 //std::cout << std::endl;
 
-int cc = 0;
-int num_pos = ((Rz_bounds[2] - Rz_bounds[0])/Rz_bounds[1] + 1)*((T_bounds[2] - T_bounds[0])/T_bounds[1] + 1);
-
-int *pose = (int *)malloc(sizeof(int)*num_cameras);
-double *Rz = (double *)malloc(sizeof(double)*num_cameras);
-double *t = (double *)malloc(sizeof(double)*num_cameras);
-double area, max_area,max_R,max_t,max_Rz;
-max_area = 0;
-polygon poly;
-
-std::vector<bool> v(num_pos);
-std::fill(v.begin(), v.begin() + num_cameras, true);
 
 sw.start();
 //Initialize allowable camera positions.
 double *positionlist = (double *)malloc(sizeof(double)*2*num_pos);
-
 cc = 0;
-
 #pragma omp parallel for collapse(2)
 for (int i = 0; i < num_Rz; i++){
 	for (int j = 0; j < num_T; j++){
@@ -91,16 +94,20 @@ for (int i = 0; i < num_Rz; i++){
 		
 	}
 }
+
 //Check every possible set of poses
 do {
 	cc = 0;
+	//std::cout << "Pose: ";
 	#pragma omp parallel for
     for (int i = 0; i < num_pos; ++i) {
         if (v[i]) {
             pose[cc] = i;
+            //std::cout << pose[cc] <<", ";
             cc++;
         }
     }
+    //std::cout << std::endl;
     #pragma omp parallel for
     for (int j = 0; j < num_cameras; j++){
     	//std::cout << pose[j] << " ";
@@ -134,12 +141,31 @@ do {
     					//poly = FOVproject(FOV_rads, plane_of_stitching, camera_R[0], camera_t[0]);
     					area = 5;
 
-    					if (area > max_area){
+    					#pragma omp critical
+    						if (area > max_area){
 
-    						max_area = area;
-    					}
+    							max_area = area;
+    							cam1[0] = t[0];
+    							cam1[1] = Rz[0];
+    							cam1[2] = R_vals[i1];
 
-    					//Check Area
+    							cam2[0] = t[1];
+    							cam2[1] = Rz[1];
+    							cam2[2] = R_vals[i2];
+
+    							cam3[0] = t[2];
+    							cam3[1] = Rz[2];
+    							cam3[2] = R_vals[i3];
+
+    							cam4[0] = t[3];
+    							cam4[1] = Rz[3];
+    							cam4[2] = R_vals[i4];
+
+    							cam5[0] = t[4];
+    							cam5[1] = Rz[4];
+    							cam5[2] = R_vals[i5];
+    						}
+    					 
     				}
     			}
     		}
@@ -154,9 +180,24 @@ sw.stop();
 std::cout << "Number of threads: " << N << std::endl;
 std::cout << "Maximum final Area: " << max_area << std::endl;
 std::cout << "Inclusive Run Time:  " << sw.count() << " ms" << std::endl;
+std::cout << "Camera 1: " << std::endl;
+std::cout << "T: " << cam1[0] << ", Rz: " << cam1[1] << ", R: " << cam1[2] << std::endl;
+std::cout << "Camera 2: " << std::endl;
+std::cout << "T: " << cam2[0] << ", Rz: " << cam2[1] << ", R: " << cam2[2] << std::endl;
+std::cout << "Camera 3: " << std::endl;
+std::cout << "T: " << cam3[0] << ", Rz: " << cam3[1] << ", R: " << cam3[2] << std::endl;
+std::cout << "Camera 4: " << std::endl;
+std::cout << "T: " << cam4[0] << ", Rz: " << cam4[1] << ", R: " << cam4[2] << std::endl;
+std::cout << "Camera 5: " << std::endl;
+std::cout << "T: " << cam5[0] << ", Rz: " << cam5[1] << ", R: " << cam5[2] << std::endl;
 
 free(positionlist);
 free(pose);
 free(Rz);
 free(t);
+free(cam1);
+free(cam2);
+free(cam3);
+free(cam4);
+free(cam5);
 }
